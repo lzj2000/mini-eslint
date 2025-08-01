@@ -3,6 +3,9 @@ import * as espree from "espree";
 import fs from "fs";
 import path from "path";
 
+import noUnusedVars from "./rules/no-unused-vars";
+import { Rule } from "./types";
+
 /**
  * 代码检查器类
  * 负责扫描、解析和分析 JavaScript/TypeScript 文件
@@ -10,6 +13,10 @@ import path from "path";
 export class Linter {
   /** 输入的文件模式列表 */
   private filePatterns: string[];
+  /** 规则列表 */
+  private rules: Rule[];
+  /** 错误信息列表 */
+  private errors: any[]; // 初始化为空数组
 
   /**
    * 构造函数
@@ -18,7 +25,15 @@ export class Linter {
    */
   constructor(options: { files: string[] }) {
     this.filePatterns = options.files;
+    this.errors = [];
+    this.initRules();
     this.scanAndParseFiles();
+  }
+
+  private initRules() {
+    this.rules = [
+      noUnusedVars
+    ];
   }
 
   /**
@@ -95,7 +110,7 @@ export class Linter {
       // 使用 Espree 解析源代码生成 AST
       const abstractSyntaxTree = espree.parse(sourceCode, parserOptions);
 
-      console.log(`✓ 成功解析 ${filePath}`, abstractSyntaxTree);
+      console.log(`✓ 成功解析 ${filePath}`);
 
       // 分析生成的 AST
       await this.analyzeAbstractSyntaxTree(abstractSyntaxTree, filePath);
@@ -122,5 +137,78 @@ export class Linter {
     // TODO: 在这里实现具体的 AST 分析逻辑
     // 可以遍历 AST 节点，应用各种代码检查规则
     console.log(`开始分析 ${filePath} 的抽象语法树...`);
+
+    try {
+      // 应用所有规则
+      for (const rule of this.rules) {
+        const listener = rule.create({
+          report: (data) => {
+            this.errors.push({ ...data, filePath })
+          }
+        });
+        this.traverse(ast, listener);
+      }
+      console.log(`分析 ${filePath} 的抽象语法树完成`);
+    } catch (error) {
+      console.error(`分析 ${filePath} 的抽象语法树时出错:`, error);
+    }
+    // 打印错误信息
+    this.printErrors();
+  }
+
+  traverse(ast: any, listener: any) {
+    // 递归遍历AST节点
+    const visit = (node: any, parent: any = null) => {
+      if (!node || typeof node !== 'object') return;
+
+      // 如果节点有type属性，并且listener中有对应的处理方法，则调用该方法
+      if (node.type && typeof listener[node.type] === 'function') {
+        listener[node.type](node);
+      }
+
+      // 处理特殊的退出事件
+      // 例如：'Program:exit'会在Program节点的所有子节点都被访问后调用
+      if (node.type && typeof listener[`${node.type}:exit`] === 'function') {
+        // 先遍历所有子节点
+        for (const key in node) {
+          if (key === 'type' || key === 'loc' || key === 'range') continue;
+
+          const child = node[key];
+          if (Array.isArray(child)) {
+            child.forEach(item => visit(item, node));
+          } else {
+            visit(child, node);
+          }
+        }
+
+        // 然后调用退出方法
+        listener[`${node.type}:exit`](node);
+        return; // 已经处理过子节点，不需要再次处理
+      }
+
+      // 遍历所有子节点
+      for (const key in node) {
+        if (key === 'type' || key === 'loc' || key === 'range') continue;
+
+        const child = node[key];
+        if (Array.isArray(child)) {
+          child.forEach(item => visit(item, node));
+        } else {
+          visit(child, node);
+        }
+      }
+    };
+
+    // 开始遍历AST
+    visit(ast);
+  }
+
+  /**
+   * 打印所有错误信息
+   */
+  printErrors() {
+    for (const error of this.errors) {
+      console.log(`[${error.filePath}] ${error.message}`);
+    }
   }
 }
