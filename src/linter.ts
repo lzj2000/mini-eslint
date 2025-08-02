@@ -2,9 +2,10 @@ import { glob } from "glob";
 import * as espree from "espree";
 import fs from "fs";
 import path from "path";
+import chalk from "chalk"; // 添加这一行
 
 import noUnusedVars from "./rules/no-unused-vars";
-import { Rule } from "./types";
+import { AST, ASTNode, LintError, Rule, RuleListener } from "./types";
 
 /**
  * 代码检查器类
@@ -16,7 +17,7 @@ export class Linter {
   /** 规则列表 */
   private rules: Rule[];
   /** 错误信息列表 */
-  private errors: any[]; // 初始化为空数组
+  private errors: LintError[]; // 初始化为空数组
 
   /**
    * 构造函数
@@ -58,7 +59,6 @@ export class Linter {
 
     // 去重处理（避免重复的文件）
     const uniqueFiles = [...new Set(allMatchedFiles)];
-    console.log(uniqueFiles);
 
     // 解析所有找到的文件
     await this.parseMultipleFiles(uniqueFiles);
@@ -76,6 +76,7 @@ export class Linter {
         console.error(`解析文件 ${file} 时出错:`, error);
       }
     }
+    this.printErrors();
   }
 
   /**
@@ -110,8 +111,6 @@ export class Linter {
       // 使用 Espree 解析源代码生成 AST
       const abstractSyntaxTree = espree.parse(sourceCode, parserOptions);
 
-      console.log(`✓ 成功解析 ${filePath}`);
-
       // 分析生成的 AST
       await this.analyzeAbstractSyntaxTree(abstractSyntaxTree, filePath);
 
@@ -133,32 +132,28 @@ export class Linter {
    * @param ast 抽象语法树对象
    * @param filePath 文件路径
    */
-  async analyzeAbstractSyntaxTree(ast: any, filePath: string) {
-    // TODO: 在这里实现具体的 AST 分析逻辑
-    // 可以遍历 AST 节点，应用各种代码检查规则
-    console.log(`开始分析 ${filePath} 的抽象语法树...`);
-
+  async analyzeAbstractSyntaxTree(ast: AST, filePath: string) {
     try {
       // 应用所有规则
       for (const rule of this.rules) {
         const listener = rule.create({
           report: (data) => {
-            this.errors.push({ ...data, filePath })
+            this.errors.push({
+              ...data,
+              filePath
+            })
           }
         });
         this.traverse(ast, listener);
       }
-      console.log(`分析 ${filePath} 的抽象语法树完成`);
     } catch (error) {
       console.error(`分析 ${filePath} 的抽象语法树时出错:`, error);
     }
-    // 打印错误信息
-    this.printErrors();
   }
 
-  traverse(ast: any, listener: any) {
+  traverse(ast: AST, listener: RuleListener) {
     // 递归遍历AST节点
-    const visit = (node: any, parent: any = null) => {
+    const visit = (node: ASTNode, parent: ASTNode | null = null) => {
       if (!node || typeof node !== 'object') return;
 
       // 如果节点有type属性，并且listener中有对应的处理方法，则调用该方法
@@ -207,8 +202,41 @@ export class Linter {
    * 打印所有错误信息
    */
   printErrors() {
-    for (const error of this.errors) {
-      console.log(`[${error.filePath}] ${error.message}`);
+    if (this.errors.length === 0) {
+      console.log(chalk.green("✓ 未发现问题"));
+      return;
     }
+
+    // 按文件分组错误
+    const errorsByFile = this.errors.reduce<Record<string, LintError[]>>((acc, error) => {
+      if (!acc[error.filePath]) {
+        acc[error.filePath] = [];
+      }
+      acc[error.filePath].push(error);
+      return acc;
+    }, {});
+
+    // 遍历每个文件的错误
+    for (const [filePath, fileErrors] of Object.entries(errorsByFile)) {
+      console.log(chalk.underline(filePath));
+
+      for (const error of fileErrors) {
+        const location = error.node && error.node.loc
+          ? `${error.node.loc.start.line}:${error.node.loc.start.column}`
+          : "未知位置";
+
+        const ruleName = error.ruleId || "未知规则";
+
+        console.log(
+          `  ${chalk.gray(location)}  ` +
+          `${chalk.red("错误")}  ` +
+          `${error.message}  ` +
+          `${chalk.gray(ruleName)}`
+        );
+      }
+      console.log(); // 添加空行分隔不同文件的错误
+    }
+
+    console.log(chalk.red(`✖ 共发现 ${this.errors.length} 个问题`));
   }
 }

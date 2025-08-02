@@ -23,7 +23,6 @@ program
   )
   .action(async (files: string[]) => {
     try {
-      console.log("开始检查代码...");
       if (files.length === 0) {
         files = ["src/**/*.{js,ts,jsx,tsx}"];
         // 检查src目录是否存在
