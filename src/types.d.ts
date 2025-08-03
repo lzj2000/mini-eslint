@@ -4,6 +4,7 @@ export interface RuleContext {
         message: string;
         ruleId: string;
     }) => void;
+    options?: any[];
 }
 
 export interface RuleListener {
@@ -12,7 +13,10 @@ export interface RuleListener {
 
 export interface Rule {
     meta: {
-        docs: string
+        name: string,
+        docs: string,
+        schema: any
+
     }
     create(ctx: RuleContext): RuleListener
 }
@@ -46,4 +50,13 @@ export interface LintError {
     message: string;
     ruleId: string;
     filePath: string;
+    severity?: 'error' | 'warn';
 }
+
+export interface config {
+    rules: {
+        [ruleName: string]: RuleConfiguration;
+    };
+}
+
+export type RuleConfiguration = 'off' | 'warn' | 'error' | [string, ...any[]];

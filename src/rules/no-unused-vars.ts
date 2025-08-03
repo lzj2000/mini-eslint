@@ -7,7 +7,9 @@ import { ASTNode, RuleContext, RuleListener } from '../types'
  */
 export default {
     meta: {
-        docs: 'disallow unused variables'
+        name: 'no-unused-vars',
+        docs: 'disallow unused variables',
+        schema: []
     },
     create(ctx: RuleContext): RuleListener {
         // 存储所有声明的变量
