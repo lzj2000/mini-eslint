@@ -7,7 +7,7 @@ export interface RuleContext {
 }
 
 export interface RuleListener {
-    [key: string]: (node: any) => void
+    [key: string]: (node: ASTNode) => void
 }
 
 export interface Rule {
