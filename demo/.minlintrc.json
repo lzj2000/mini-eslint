@@ -1,5 +1,9 @@
 {
     "rules": {
-        "no-unused-vars": "warn"
+        "no-unused-vars": "error",
+        "semi": [
+            "warn",
+            "never"
+        ]
     }
 }

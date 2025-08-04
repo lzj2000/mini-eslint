@@ -1,62 +1,60 @@
 export interface RuleContext {
-    report: (data: {
-        node: ASTNode;
-        message: string;
-        ruleId: string;
-    }) => void;
-    options?: any[];
+  report: (data: { node: ASTNode; message: string; ruleId: string; line: number; column: number }) => void;
+  options?: any[];
+  getSourceCode: () => string;
 }
 
 export interface RuleListener {
-    [key: string]: (node: ASTNode) => void
+  [key: string]: (node: ASTNode) => void;
 }
 
 export interface Rule {
-    meta: {
-        name: string,
-        docs: string,
-        schema: any
-
-    }
-    create(ctx: RuleContext): RuleListener
+  meta: {
+    name: string;
+    docs: string;
+    schema: any;
+  };
+  create(ctx: RuleContext): RuleListener;
 }
 
 export interface Position {
-    line: number;
-    column: number;
+  line: number;
+  column: number;
 }
 
 export interface SourceLocation {
-    start: Position;
-    end: Position;
+  start: Position;
+  end: Position;
 }
 
 export interface ASTNode {
-    type: string;
-    loc?: SourceLocation;
-    range?: [number, number];
-    [key: string]: any;
+  type: string;
+  loc?: SourceLocation;
+  range?: [number, number];
+  [key: string]: any;
 }
 
 export interface AST extends ASTNode {
-    body: ASTNode[];
-    sourceType?: string;
-    comments?: any[];
-    tokens?: any[];
+  body: ASTNode[];
+  sourceType?: string;
+  comments?: any[];
+  tokens?: any[];
 }
 
 export interface LintError {
-    node: ASTNode;
-    message: string;
-    ruleId: string;
-    filePath: string;
-    severity?: 'error' | 'warn';
+  node: ASTNode;
+  message: string;
+  ruleId: string;
+  filePath: string;
+  severity?: "error" | "warn";
+  line: number;
+  column: number;
 }
 
 export interface config {
-    rules: {
-        [ruleName: string]: RuleConfiguration;
-    };
+  rules: {
+    [ruleName: string]: RuleConfiguration;
+  };
 }
 
-export type RuleConfiguration = 'off' | 'warn' | 'error' | [string, ...any[]];
+export type RuleConfiguration = "off" | "warn" | "error" | [string, ...any[]];

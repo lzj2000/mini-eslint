@@ -5,6 +5,7 @@ import path from "path";
 import chalk from "chalk"; // 添加这一行
 
 import noUnusedVars from "./rules/no-unused-vars";
+import semi from "./rules/semi";
 import { AST, ASTNode, LintError, Rule, RuleListener } from "./types";
 
 /**
@@ -62,7 +63,7 @@ export class Linter {
   }
 
   private initRules() {
-    this.rules = [noUnusedVars];
+    this.rules = [noUnusedVars, semi];
   }
 
   /**
@@ -140,7 +141,11 @@ export class Linter {
       const abstractSyntaxTree = espree.parse(sourceCode, parserOptions);
 
       // 分析生成的 AST
-      await this.analyzeAbstractSyntaxTree(abstractSyntaxTree, filePath);
+      await this.analyzeAbstractSyntaxTree(
+        abstractSyntaxTree,
+        filePath,
+        sourceCode
+      );
 
       return abstractSyntaxTree;
     } catch (error) {
@@ -160,7 +165,11 @@ export class Linter {
    * @param ast 抽象语法树对象
    * @param filePath 文件路径
    */
-  async analyzeAbstractSyntaxTree(ast: AST, filePath: string) {
+  async analyzeAbstractSyntaxTree(
+    ast: AST,
+    filePath: string,
+    sourceCode: string
+  ) {
     try {
       // 应用所有规则
       for (const rule of this.rules) {
@@ -184,6 +193,7 @@ export class Linter {
             });
           },
           options: ruleOptions,
+          getSourceCode: () => sourceCode,
         });
         this.traverse(ast, listener);
       }
@@ -281,10 +291,7 @@ export class Linter {
       console.log(chalk.underline(filePath));
 
       for (const error of fileErrors) {
-        const location =
-          error.node && error.node.loc
-            ? `${error.node.loc.start.line}:${error.node.loc.start.column}`
-            : "未知位置";
+        const location = `${error.line}:${error.column}`;
 
         const ruleName = error.ruleId || "未知规则";
         const severity = error.severity || "error";
