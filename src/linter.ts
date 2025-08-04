@@ -26,7 +26,7 @@ export class Linter {
    * @param options 配置选项
    * @param options.files 要检查的文件模式数组
    */
-  constructor(options: { files: string[], configFile?: string }) {
+  constructor(options: { files: string[]; configFile?: string }) {
     this.filePatterns = options.files;
     this.errors = [];
 
@@ -42,13 +42,13 @@ export class Linter {
   // 读取配置文件
   private loadConfigFile(configFilePath: string) {
     try {
-      const configFileContent = fs.readFileSync(configFilePath, 'utf-8');
+      const configFileContent = fs.readFileSync(configFilePath, "utf-8");
       const fileExtension = path.extname(configFilePath);
 
       let config;
-      if (fileExtension === '.json') {
+      if (fileExtension === ".json") {
         config = JSON.parse(configFileContent);
-      } else if (fileExtension === '.js') {
+      } else if (fileExtension === ".js") {
         const absolutePath = path.resolve(configFilePath);
         config = require(absolutePath);
       } else {
@@ -62,9 +62,7 @@ export class Linter {
   }
 
   private initRules() {
-    this.rules = [
-      noUnusedVars
-    ];
+    this.rules = [noUnusedVars];
   }
 
   /**
@@ -169,9 +167,12 @@ export class Linter {
         const ruleOptions = this.getRuleOptions(rule);
         const ruleName = rule.meta.name;
         const ruleConfig = this.config?.rules?.[ruleName];
-        let severity: 'error' | 'warn' = 'error';
-        if (ruleConfig === 'warn' || (Array.isArray(ruleConfig) && ruleConfig[0] === 'warn')) {
-          severity = 'warn';
+        let severity: "error" | "warn" = "error";
+        if (
+          ruleConfig === "warn" ||
+          (Array.isArray(ruleConfig) && ruleConfig[0] === "warn")
+        ) {
+          severity = "warn";
         }
 
         const listener = rule.create({
@@ -179,10 +180,10 @@ export class Linter {
             this.errors.push({
               ...data,
               filePath,
-              severity
-            })
+              severity,
+            });
           },
-          options: ruleOptions
+          options: ruleOptions,
         });
         this.traverse(ast, listener);
       }
@@ -206,23 +207,23 @@ export class Linter {
   traverse(ast: AST, listener: RuleListener) {
     // 递归遍历AST节点
     const visit = (node: ASTNode, parent: ASTNode | null = null) => {
-      if (!node || typeof node !== 'object') return;
+      if (!node || typeof node !== "object") return;
 
       // 如果节点有type属性，并且listener中有对应的处理方法，则调用该方法
-      if (node.type && typeof listener[node.type] === 'function') {
+      if (node.type && typeof listener[node.type] === "function") {
         listener[node.type](node);
       }
 
       // 处理特殊的退出事件
       // 例如：'Program:exit'会在Program节点的所有子节点都被访问后调用
-      if (node.type && typeof listener[`${node.type}:exit`] === 'function') {
+      if (node.type && typeof listener[`${node.type}:exit`] === "function") {
         // 先遍历所有子节点
         for (const key in node) {
-          if (key === 'type' || key === 'loc' || key === 'range') continue;
+          if (key === "type" || key === "loc" || key === "range") continue;
 
           const child = node[key];
           if (Array.isArray(child)) {
-            child.forEach(item => visit(item, node));
+            child.forEach((item) => visit(item, node));
           } else {
             visit(child, node);
           }
@@ -235,11 +236,11 @@ export class Linter {
 
       // 遍历所有子节点
       for (const key in node) {
-        if (key === 'type' || key === 'loc' || key === 'range') continue;
+        if (key === "type" || key === "loc" || key === "range") continue;
 
         const child = node[key];
         if (Array.isArray(child)) {
-          child.forEach(item => visit(item, node));
+          child.forEach((item) => visit(item, node));
         } else {
           visit(child, node);
         }
@@ -258,58 +259,62 @@ export class Linter {
       console.log(chalk.green("✓ 未发现问题"));
       return;
     }
-  
+
     // 按文件分组错误
-    const errorsByFile = this.errors.reduce<Record<string, LintError[]>>((acc, error) => {
-      if (!acc[error.filePath]) {
-        acc[error.filePath] = [];
-      }
-      acc[error.filePath].push(error);
-      return acc;
-    }, {});
-  
+    const errorsByFile = this.errors.reduce<Record<string, LintError[]>>(
+      (acc, error) => {
+        if (!acc[error.filePath]) {
+          acc[error.filePath] = [];
+        }
+        acc[error.filePath].push(error);
+        return acc;
+      },
+      {}
+    );
+
     // 统计错误和警告的数量
     let errorCount = 0;
     let warningCount = 0;
-  
+
     // 遍历每个文件的错误
     for (const [filePath, fileErrors] of Object.entries(errorsByFile)) {
       console.log(chalk.underline(filePath));
-  
+
       for (const error of fileErrors) {
-        const location = error.node && error.node.loc
-          ? `${error.node.loc.start.line}:${error.node.loc.start.column}`
-          : "未知位置";
+        const location =
+          error.node && error.node.loc
+            ? `${error.node.loc.start.line}:${error.node.loc.start.column}`
+            : "未知位置";
 
         const ruleName = error.ruleId || "未知规则";
-        const severity = error.severity || 'error';
-  
+        const severity = error.severity || "error";
+
         // 根据错误级别设置不同的颜色和文本
-        const severityColor = severity === 'error' ? chalk.red : chalk.yellow;
-        const severityText = severity === 'error' ? "错误" : "警告";
-  
+        const severityColor = severity === "error" ? chalk.red : chalk.yellow;
+        const severityText = severity === "error" ? "错误" : "警告";
+
         // 更新计数
-        if (severity === 'error') {
+        if (severity === "error") {
           errorCount++;
         } else {
           warningCount++;
         }
-  
+
         console.log(
           `  ${chalk.gray(location)}  ` +
-          `${severityColor(severityText)}  ` +
-          `${error.message}  ` +
-          `${chalk.gray(ruleName)}`
+            `${severityColor(severityText)}  ` +
+            `${error.message}  ` +
+            `${chalk.gray(ruleName)}`
         );
       }
       console.log(); // 添加空行分隔不同文件的错误
     }
-  
+
     // 根据错误和警告的数量显示不同的总结信息
     if (errorCount > 0 && warningCount > 0) {
       console.log(
-        chalk.red(`✖ 共发现 ${errorCount} 个错误`) + 
-        chalk.yellow(` 和 ${warningCount} 个警告`)
+        chalk.red(`✖ 共发现 ${errorCount} 个错误`) +
+          chalk.yellow(` 和 ${warningCount} 个警告`)
       );
     } else if (errorCount > 0) {
       console.log(chalk.red(`✖ 共发现 ${errorCount} 个错误`));
