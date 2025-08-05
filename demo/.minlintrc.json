@@ -1,6 +1,5 @@
 {
     "rules": {
-        "no-unused-vars": "error",
         "semi": [
             "warn",
             "never"

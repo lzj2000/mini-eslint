@@ -52,9 +52,11 @@ export interface LintError {
 }
 
 export interface config {
-  rules: {
-    [ruleName: string]: RuleConfiguration;
-  };
+  rules: Rules;
+}
+
+export interface Rules {
+  [ruleName: string]: RuleConfiguration;
 }
 
 export type RuleConfiguration = "off" | "warn" | "error" | [string, ...any[]];

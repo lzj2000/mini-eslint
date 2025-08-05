@@ -2,11 +2,12 @@ import { glob } from "glob";
 import * as espree from "espree";
 import fs from "fs";
 import path from "path";
-import chalk from "chalk"; // 添加这一行
+import chalk from "chalk";
 
-import noUnusedVars from "./rules/no-unused-vars";
-import semi from "./rules/semi";
 import { AST, ASTNode, LintError, Rule, RuleListener } from "./types";
+import { loadRules } from "./rules";
+import { defaultConfig } from "./default-config";
+import { mergeConfigs } from "./utils";
 
 /**
  * 代码检查器类
@@ -31,9 +32,11 @@ export class Linter {
     this.filePatterns = options.files;
     this.errors = [];
 
-    // 读取配置文件
+    // 读取配置文件或使用默认配置
     if (options.configFile) {
       this.config = this.loadConfigFile(options.configFile);
+    } else {
+      this.config = defaultConfig;
     }
 
     this.initRules();
@@ -46,24 +49,27 @@ export class Linter {
       const configFileContent = fs.readFileSync(configFilePath, "utf-8");
       const fileExtension = path.extname(configFilePath);
 
-      let config;
+      let userConfig;
       if (fileExtension === ".json") {
-        config = JSON.parse(configFileContent);
+        userConfig = JSON.parse(configFileContent);
       } else if (fileExtension === ".js") {
         const absolutePath = path.resolve(configFilePath);
-        config = require(absolutePath);
+        userConfig = require(absolutePath);
       } else {
         throw new Error(`不支持的配置文件格式: ${fileExtension}`);
       }
 
-      return config;
+      // 合并配置，以用户配置为主
+      const mergedConfig = mergeConfigs(defaultConfig, userConfig);
+      return mergedConfig;
     } catch (error) {
-      return {}; // 返回空配置
+      console.warn(`读取配置文件失败，使用默认配置: ${error.message}`);
+      return defaultConfig; // 返回默认配置
     }
   }
 
   private initRules() {
-    this.rules = [noUnusedVars, semi];
+    this.rules = loadRules(this.config.rules);
   }
 
   /**
@@ -309,9 +315,9 @@ export class Linter {
 
         console.log(
           `  ${chalk.gray(location)}  ` +
-            `${severityColor(severityText)}  ` +
-            `${error.message}  ` +
-            `${chalk.gray(ruleName)}`
+          `${severityColor(severityText)}  ` +
+          `${error.message}  ` +
+          `${chalk.gray(ruleName)}`
         );
       }
       console.log(); // 添加空行分隔不同文件的错误
@@ -321,7 +327,7 @@ export class Linter {
     if (errorCount > 0 && warningCount > 0) {
       console.log(
         chalk.red(`✖ 共发现 ${errorCount} 个错误`) +
-          chalk.yellow(` 和 ${warningCount} 个警告`)
+        chalk.yellow(` 和 ${warningCount} 个警告`)
       );
     } else if (errorCount > 0) {
       console.log(chalk.red(`✖ 共发现 ${errorCount} 个错误`));
