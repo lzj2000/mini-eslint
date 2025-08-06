@@ -5,6 +5,7 @@ import path from "path";
 
 import { version } from "../package.json";
 import { Linter } from "./linter";
+import { stylish } from "./formatter/stylish";
 
 const program = new Command();
 
@@ -54,8 +55,16 @@ program
         files,
         configFile
       });
+
+      // 获取错误并打印
+      const errors = linter.getErrors();
+      stylish(errors);
+
+      // 设置退出码,有违规返回 1，否则 0
+      process.exitCode = errors.length > 0 ? 1 : 0
     } catch (error) {
       console.error(error);
+      process.exit(1);// 错误退出程序
     }
   });
 

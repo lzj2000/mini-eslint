@@ -8,7 +8,6 @@ import { AST, ASTNode, LintError, Rule, RuleListener } from "./types";
 import { loadRules } from "./rules";
 import { defaultConfig } from "./default-config";
 import { mergeConfigs } from "./utils";
-import { stylish } from "./formatter/stylish";
 
 /**
  * 代码检查器类
@@ -112,7 +111,6 @@ export class Linter {
         console.error(`解析文件 ${file} 时出错:`, error);
       }
     }
-    this.printErrors();
   }
 
   /**
@@ -269,10 +267,10 @@ export class Linter {
   }
 
   /**
-   * 打印所有错误信息
+   * 获取所有错误信息
+   * @returns 错误信息列表
    */
-  printErrors() {
-    // 使用stylish格式化器输出错误
-    stylish(this.errors);
+  getErrors(): LintError[] {
+    return this.errors;
   }
 }
