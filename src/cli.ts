@@ -21,8 +21,24 @@ program
     "[files...]",
     '要检查的文件或glob模式（默认: "src/**/*.{js,ts,jsx,tsx}"）'
   )
-  .action(async (files: string[]) => {
+  .option('-c, --config <path>', '配置文件路径（默认: ".minlintrc.{json,js}"）')
+  .action(async (files: string[], options: any) => {
     try {
+      // 处理配置文件路径
+      let configFile = options.config;
+      if (!configFile) {
+        const defaultConfigPaths = [
+          path.join(process.cwd(), '.minlintrc.json'),
+          path.join(process.cwd(), '.minlintrc.js')
+        ];
+        for (const configPath of defaultConfigPaths) {
+          if (fs.existsSync(configPath)) {
+            configFile = configPath;
+            break;
+          }
+        }
+      }
+
       if (files.length === 0) {
         files = ["src/**/*.{js,ts,jsx,tsx}"];
         // 检查src目录是否存在
@@ -33,7 +49,11 @@ program
           files = ["**/*.{js,ts,jsx,tsx}"];
         }
       }
-      const linter = new Linter({ files });
+
+      const linter = new Linter({
+        files,
+        configFile
+      });
     } catch (error) {
       console.error(error);
     }

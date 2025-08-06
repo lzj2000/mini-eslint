@@ -2,10 +2,12 @@ import { glob } from "glob";
 import * as espree from "espree";
 import fs from "fs";
 import path from "path";
-import chalk from "chalk"; // 添加这一行
+import chalk from "chalk";
 
-import noUnusedVars from "./rules/no-unused-vars";
 import { AST, ASTNode, LintError, Rule, RuleListener } from "./types";
+import { loadRules } from "./rules";
+import { defaultConfig } from "./default-config";
+import { mergeConfigs } from "./utils";
 
 /**
  * 代码检查器类
@@ -18,23 +20,56 @@ export class Linter {
   private rules: Rule[];
   /** 错误信息列表 */
   private errors: LintError[]; // 初始化为空数组
+  /** 配置 */
+  private config;
 
   /**
    * 构造函数
    * @param options 配置选项
    * @param options.files 要检查的文件模式数组
    */
-  constructor(options: { files: string[] }) {
+  constructor(options: { files: string[]; configFile?: string }) {
     this.filePatterns = options.files;
     this.errors = [];
+
+    // 读取配置文件或使用默认配置
+    if (options.configFile) {
+      this.config = this.loadConfigFile(options.configFile);
+    } else {
+      this.config = defaultConfig;
+    }
+
     this.initRules();
     this.scanAndParseFiles();
   }
 
+  // 读取配置文件
+  private loadConfigFile(configFilePath: string) {
+    try {
+      const configFileContent = fs.readFileSync(configFilePath, "utf-8");
+      const fileExtension = path.extname(configFilePath);
+
+      let userConfig;
+      if (fileExtension === ".json") {
+        userConfig = JSON.parse(configFileContent);
+      } else if (fileExtension === ".js") {
+        const absolutePath = path.resolve(configFilePath);
+        userConfig = require(absolutePath);
+      } else {
+        throw new Error(`不支持的配置文件格式: ${fileExtension}`);
+      }
+
+      // 合并配置，以用户配置为主
+      const mergedConfig = mergeConfigs(defaultConfig, userConfig);
+      return mergedConfig;
+    } catch (error) {
+      console.warn(`读取配置文件失败，使用默认配置: ${error.message}`);
+      return defaultConfig; // 返回默认配置
+    }
+  }
+
   private initRules() {
-    this.rules = [
-      noUnusedVars
-    ];
+    this.rules = loadRules(this.config.rules);
   }
 
   /**
@@ -112,7 +147,11 @@ export class Linter {
       const abstractSyntaxTree = espree.parse(sourceCode, parserOptions);
 
       // 分析生成的 AST
-      await this.analyzeAbstractSyntaxTree(abstractSyntaxTree, filePath);
+      await this.analyzeAbstractSyntaxTree(
+        abstractSyntaxTree,
+        filePath,
+        sourceCode
+      );
 
       return abstractSyntaxTree;
     } catch (error) {
@@ -132,17 +171,35 @@ export class Linter {
    * @param ast 抽象语法树对象
    * @param filePath 文件路径
    */
-  async analyzeAbstractSyntaxTree(ast: AST, filePath: string) {
+  async analyzeAbstractSyntaxTree(
+    ast: AST,
+    filePath: string,
+    sourceCode: string
+  ) {
     try {
       // 应用所有规则
       for (const rule of this.rules) {
+        const ruleOptions = this.getRuleOptions(rule);
+        const ruleName = rule.meta.name;
+        const ruleConfig = this.config?.rules?.[ruleName];
+        let severity: "error" | "warn" = "error";
+        if (
+          ruleConfig === "warn" ||
+          (Array.isArray(ruleConfig) && ruleConfig[0] === "warn")
+        ) {
+          severity = "warn";
+        }
+
         const listener = rule.create({
           report: (data) => {
             this.errors.push({
               ...data,
-              filePath
-            })
-          }
+              filePath,
+              severity,
+            });
+          },
+          options: ruleOptions,
+          getSourceCode: () => sourceCode,
         });
         this.traverse(ast, listener);
       }
@@ -151,26 +208,38 @@ export class Linter {
     }
   }
 
+  // 获取规则选项
+  private getRuleOptions(rule: Rule): any[] {
+    const ruleName = rule.meta.name;
+    const ruleConfig = this.config?.rules?.[ruleName];
+
+    if (Array.isArray(ruleConfig) && ruleConfig.length > 1) {
+      return ruleConfig.slice(1); // 第一个元素是错误级别，后面的是选项
+    }
+
+    return [];
+  }
+
   traverse(ast: AST, listener: RuleListener) {
     // 递归遍历AST节点
     const visit = (node: ASTNode, parent: ASTNode | null = null) => {
-      if (!node || typeof node !== 'object') return;
+      if (!node || typeof node !== "object") return;
 
       // 如果节点有type属性，并且listener中有对应的处理方法，则调用该方法
-      if (node.type && typeof listener[node.type] === 'function') {
+      if (node.type && typeof listener[node.type] === "function") {
         listener[node.type](node);
       }
 
       // 处理特殊的退出事件
       // 例如：'Program:exit'会在Program节点的所有子节点都被访问后调用
-      if (node.type && typeof listener[`${node.type}:exit`] === 'function') {
+      if (node.type && typeof listener[`${node.type}:exit`] === "function") {
         // 先遍历所有子节点
         for (const key in node) {
-          if (key === 'type' || key === 'loc' || key === 'range') continue;
+          if (key === "type" || key === "loc" || key === "range") continue;
 
           const child = node[key];
           if (Array.isArray(child)) {
-            child.forEach(item => visit(item, node));
+            child.forEach((item) => visit(item, node));
           } else {
             visit(child, node);
           }
@@ -183,11 +252,11 @@ export class Linter {
 
       // 遍历所有子节点
       for (const key in node) {
-        if (key === 'type' || key === 'loc' || key === 'range') continue;
+        if (key === "type" || key === "loc" || key === "range") continue;
 
         const child = node[key];
         if (Array.isArray(child)) {
-          child.forEach(item => visit(item, node));
+          child.forEach((item) => visit(item, node));
         } else {
           visit(child, node);
         }
@@ -208,28 +277,45 @@ export class Linter {
     }
 
     // 按文件分组错误
-    const errorsByFile = this.errors.reduce<Record<string, LintError[]>>((acc, error) => {
-      if (!acc[error.filePath]) {
-        acc[error.filePath] = [];
-      }
-      acc[error.filePath].push(error);
-      return acc;
-    }, {});
+    const errorsByFile = this.errors.reduce<Record<string, LintError[]>>(
+      (acc, error) => {
+        if (!acc[error.filePath]) {
+          acc[error.filePath] = [];
+        }
+        acc[error.filePath].push(error);
+        return acc;
+      },
+      {}
+    );
+
+    // 统计错误和警告的数量
+    let errorCount = 0;
+    let warningCount = 0;
 
     // 遍历每个文件的错误
     for (const [filePath, fileErrors] of Object.entries(errorsByFile)) {
       console.log(chalk.underline(filePath));
 
       for (const error of fileErrors) {
-        const location = error.node && error.node.loc
-          ? `${error.node.loc.start.line}:${error.node.loc.start.column}`
-          : "未知位置";
+        const location = `${error.line}:${error.column}`;
 
         const ruleName = error.ruleId || "未知规则";
+        const severity = error.severity || "error";
+
+        // 根据错误级别设置不同的颜色和文本
+        const severityColor = severity === "error" ? chalk.red : chalk.yellow;
+        const severityText = severity === "error" ? "错误" : "警告";
+
+        // 更新计数
+        if (severity === "error") {
+          errorCount++;
+        } else {
+          warningCount++;
+        }
 
         console.log(
           `  ${chalk.gray(location)}  ` +
-          `${chalk.red("错误")}  ` +
+          `${severityColor(severityText)}  ` +
           `${error.message}  ` +
           `${chalk.gray(ruleName)}`
         );
@@ -237,6 +323,16 @@ export class Linter {
       console.log(); // 添加空行分隔不同文件的错误
     }
 
-    console.log(chalk.red(`✖ 共发现 ${this.errors.length} 个问题`));
+    // 根据错误和警告的数量显示不同的总结信息
+    if (errorCount > 0 && warningCount > 0) {
+      console.log(
+        chalk.red(`✖ 共发现 ${errorCount} 个错误`) +
+        chalk.yellow(` 和 ${warningCount} 个警告`)
+      );
+    } else if (errorCount > 0) {
+      console.log(chalk.red(`✖ 共发现 ${errorCount} 个错误`));
+    } else if (warningCount > 0) {
+      console.log(chalk.yellow(`⚠ 共发现 ${warningCount} 个警告`));
+    }
   }
 }
