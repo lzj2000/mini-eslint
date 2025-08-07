@@ -111,7 +111,6 @@ export class Linter {
         console.error(`解析文件 ${file} 时出错:`, error);
       }
     }
-    this.printErrors();
   }
 
   /**
@@ -268,71 +267,10 @@ export class Linter {
   }
 
   /**
-   * 打印所有错误信息
+   * 获取所有错误信息
+   * @returns 错误信息列表
    */
-  printErrors() {
-    if (this.errors.length === 0) {
-      console.log(chalk.green("✓ 未发现问题"));
-      return;
-    }
-
-    // 按文件分组错误
-    const errorsByFile = this.errors.reduce<Record<string, LintError[]>>(
-      (acc, error) => {
-        if (!acc[error.filePath]) {
-          acc[error.filePath] = [];
-        }
-        acc[error.filePath].push(error);
-        return acc;
-      },
-      {}
-    );
-
-    // 统计错误和警告的数量
-    let errorCount = 0;
-    let warningCount = 0;
-
-    // 遍历每个文件的错误
-    for (const [filePath, fileErrors] of Object.entries(errorsByFile)) {
-      console.log(chalk.underline(filePath));
-
-      for (const error of fileErrors) {
-        const location = `${error.line}:${error.column}`;
-
-        const ruleName = error.ruleId || "未知规则";
-        const severity = error.severity || "error";
-
-        // 根据错误级别设置不同的颜色和文本
-        const severityColor = severity === "error" ? chalk.red : chalk.yellow;
-        const severityText = severity === "error" ? "错误" : "警告";
-
-        // 更新计数
-        if (severity === "error") {
-          errorCount++;
-        } else {
-          warningCount++;
-        }
-
-        console.log(
-          `  ${chalk.gray(location)}  ` +
-          `${severityColor(severityText)}  ` +
-          `${error.message}  ` +
-          `${chalk.gray(ruleName)}`
-        );
-      }
-      console.log(); // 添加空行分隔不同文件的错误
-    }
-
-    // 根据错误和警告的数量显示不同的总结信息
-    if (errorCount > 0 && warningCount > 0) {
-      console.log(
-        chalk.red(`✖ 共发现 ${errorCount} 个错误`) +
-        chalk.yellow(` 和 ${warningCount} 个警告`)
-      );
-    } else if (errorCount > 0) {
-      console.log(chalk.red(`✖ 共发现 ${errorCount} 个错误`));
-    } else if (warningCount > 0) {
-      console.log(chalk.yellow(`⚠ 共发现 ${warningCount} 个警告`));
-    }
+  getErrors(): LintError[] {
+    return this.errors;
   }
 }
