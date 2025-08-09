@@ -57,7 +57,7 @@ program
       });
 
       // 获取错误并打印
-      const errors = linter.getErrors();
+      const errors = await linter.getErrors();
       stylish(errors);
 
       // 设置退出码,有违规返回 1，否则 0

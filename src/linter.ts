@@ -2,12 +2,11 @@ import { glob } from "glob";
 import * as espree from "espree";
 import fs from "fs";
 import path from "path";
-import chalk from "chalk";
 
-import { AST, ASTNode, LintError, Rule, RuleListener } from "./types";
+import { AST, LintError, Rule } from "./types";
 import { loadRules } from "./rules";
 import { defaultConfig } from "./default-config";
-import { mergeConfigs } from "./utils";
+import { mergeConfigs, traverse } from "./utils";
 
 /**
  * 代码检查器类
@@ -22,6 +21,8 @@ export class Linter {
   private errors: LintError[]; // 初始化为空数组
   /** 配置 */
   private config;
+  /** 分析完成的 Promise */
+  private analysisComplete: Promise<void>;
 
   /**
    * 构造函数
@@ -40,7 +41,8 @@ export class Linter {
     }
 
     this.initRules();
-    this.scanAndParseFiles();
+    // 保存分析过程的 Promise，以便后续等待
+    this.analysisComplete = this.scanAndParseFiles();
   }
 
   // 读取配置文件
@@ -76,7 +78,7 @@ export class Linter {
    * 扫描并解析文件
    * 根据文件模式查找匹配的文件，然后解析生成 AST
    */
-  async scanAndParseFiles() {
+  private async scanAndParseFiles(): Promise<void> {
     let allMatchedFiles: string[] = [];
 
     // 遍历每个文件模式，查找匹配的文件
@@ -103,14 +105,17 @@ export class Linter {
    * 批量解析多个文件
    * @param files 要解析的文件路径数组
    */
-  async parseMultipleFiles(files: string[]) {
-    for (const file of files) {
-      try {
-        await this.parseSingleFile(file);
-      } catch (error) {
-        console.error(`解析文件 ${file} 时出错:`, error);
-      }
-    }
+  private async parseMultipleFiles(files: string[]): Promise<void> {
+    // 使用 Promise.all 等待所有文件解析完成
+    await Promise.all(
+      files.map(async (file) => {
+        try {
+          await this.parseSingleFile(file);
+        } catch (error) {
+          console.error(`解析文件 ${file} 时出错:`, error);
+        }
+      })
+    );
   }
 
   /**
@@ -200,7 +205,7 @@ export class Linter {
           options: ruleOptions,
           getSourceCode: () => sourceCode,
         });
-        this.traverse(ast, listener);
+        traverse(ast, listener);
       }
     } catch (error) {
       console.error(`分析 ${filePath} 的抽象语法树时出错:`, error);
@@ -219,58 +224,13 @@ export class Linter {
     return [];
   }
 
-  traverse(ast: AST, listener: RuleListener) {
-    // 递归遍历AST节点
-    const visit = (node: ASTNode, parent: ASTNode | null = null) => {
-      if (!node || typeof node !== "object") return;
-
-      // 如果节点有type属性，并且listener中有对应的处理方法，则调用该方法
-      if (node.type && typeof listener[node.type] === "function") {
-        listener[node.type](node);
-      }
-
-      // 处理特殊的退出事件
-      // 例如：'Program:exit'会在Program节点的所有子节点都被访问后调用
-      if (node.type && typeof listener[`${node.type}:exit`] === "function") {
-        // 先遍历所有子节点
-        for (const key in node) {
-          if (key === "type" || key === "loc" || key === "range") continue;
-
-          const child = node[key];
-          if (Array.isArray(child)) {
-            child.forEach((item) => visit(item, node));
-          } else {
-            visit(child, node);
-          }
-        }
-
-        // 然后调用退出方法
-        listener[`${node.type}:exit`](node);
-        return; // 已经处理过子节点，不需要再次处理
-      }
-
-      // 遍历所有子节点
-      for (const key in node) {
-        if (key === "type" || key === "loc" || key === "range") continue;
-
-        const child = node[key];
-        if (Array.isArray(child)) {
-          child.forEach((item) => visit(item, node));
-        } else {
-          visit(child, node);
-        }
-      }
-    };
-
-    // 开始遍历AST
-    visit(ast);
-  }
-
   /**
    * 获取所有错误信息
    * @returns 错误信息列表
    */
-  getErrors(): LintError[] {
+  async getErrors(): Promise<LintError[]> {
+    // 等待分析完成后再返回错误
+    await this.analysisComplete;
     return this.errors;
   }
 }
