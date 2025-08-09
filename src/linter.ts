@@ -2,9 +2,8 @@ import { glob } from "glob";
 import * as espree from "espree";
 import fs from "fs";
 import path from "path";
-import chalk from "chalk";
 
-import { AST, ASTNode, LintError, Rule, RuleListener } from "./types";
+import { AST, LintError, Rule } from "./types";
 import { loadRules } from "./rules";
 import { defaultConfig } from "./default-config";
 import { mergeConfigs, traverse } from "./utils";
