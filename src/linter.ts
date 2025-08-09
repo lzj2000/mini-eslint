@@ -22,6 +22,8 @@ export class Linter {
   private errors: LintError[]; // 初始化为空数组
   /** 配置 */
   private config;
+  /** 分析完成的 Promise */
+  private analysisComplete: Promise<void>;
 
   /**
    * 构造函数
@@ -40,7 +42,8 @@ export class Linter {
     }
 
     this.initRules();
-    this.scanAndParseFiles();
+    // 保存分析过程的 Promise，以便后续等待
+    this.analysisComplete = this.scanAndParseFiles();
   }
 
   // 读取配置文件
@@ -76,7 +79,7 @@ export class Linter {
    * 扫描并解析文件
    * 根据文件模式查找匹配的文件，然后解析生成 AST
    */
-  async scanAndParseFiles() {
+  private async scanAndParseFiles(): Promise<void> {
     let allMatchedFiles: string[] = [];
 
     // 遍历每个文件模式，查找匹配的文件
@@ -103,14 +106,17 @@ export class Linter {
    * 批量解析多个文件
    * @param files 要解析的文件路径数组
    */
-  async parseMultipleFiles(files: string[]) {
-    for (const file of files) {
-      try {
-        await this.parseSingleFile(file);
-      } catch (error) {
-        console.error(`解析文件 ${file} 时出错:`, error);
-      }
-    }
+  private async parseMultipleFiles(files: string[]): Promise<void> {
+    // 使用 Promise.all 等待所有文件解析完成
+    await Promise.all(
+      files.map(async (file) => {
+        try {
+          await this.parseSingleFile(file);
+        } catch (error) {
+          console.error(`解析文件 ${file} 时出错:`, error);
+        }
+      })
+    );
   }
 
   /**
@@ -223,7 +229,9 @@ export class Linter {
    * 获取所有错误信息
    * @returns 错误信息列表
    */
-  getErrors(): LintError[] {
+  async getErrors(): Promise<LintError[]> {
+    // 等待分析完成后再返回错误
+    await this.analysisComplete;
     return this.errors;
   }
 }
