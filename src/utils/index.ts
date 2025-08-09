@@ -1,4 +1,5 @@
 import { ASTNode, config } from "../types";
+export { traverse } from "./ast-utils";
 
 export function getNodeLocation(node: ASTNode): {
   line: number;

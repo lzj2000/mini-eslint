@@ -1,6 +1,6 @@
 export interface RuleContext {
   report: (data: { node: ASTNode; message: string; ruleId: string; line: number; column: number }) => void;
-  options?: any[];
+  options?: string[];
   getSourceCode: () => string;
 }
 
