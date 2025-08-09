@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import * as espree from 'espree';
-import { AST } from '../types';
-import { traverse } from '../utils';
-import Semi from '../rules/semi';
-import NoUnusedVars from '../rules/no-unused-vars';
+import { AST } from '../src/types';
+import { traverse } from '../src/utils';
+import Semi from '../src/rules/semi';
+import NoUnusedVars from '../src/rules/no-unused-vars';
 
 // 辅助函数：解析代码生成AST
 function parseCode(code: string): AST {
@@ -51,19 +51,19 @@ describe('Semi规则测试', () => {
         expect(errors[0].message).toContain('Missing semicolon');
         expect(errors[0].ruleId).toBe('semi');
     });
-    
+
     it('不应该检测缺少分号的情况 (always模式)', () => {
         // 准备测试代码和上下文 - 所有语句都有分号
         const code = 'const a = 1;\nconst b = 2;';
         const { context, errors, setSourceCode } = createContext();
         setSourceCode(code);
         context.options = ['always'];
-        
+
         // 创建规则监听器并应用到AST
         const listener = Semi.create(context);
         const ast = parseCode(code);
         traverse(ast, listener);
-        
+
         // 验证结果 - 不应该有错误
         expect(errors.length).toBe(0);
     });
@@ -85,19 +85,19 @@ describe('Semi规则测试', () => {
         expect(errors[0].message).toContain('Extra semicolon');
         expect(errors[0].ruleId).toBe('semi');
     });
-    
+
     it('不应该检测多余分号的情况 (never模式)', () => {
         // 准备测试代码和上下文 - 所有语句都没有分号
         const code = 'const a = 1\nconst b = 2';
         const { context, errors, setSourceCode } = createContext();
         setSourceCode(code);
         context.options = ['never'];
-        
+
         // 创建规则监听器并应用到AST
         const listener = Semi.create(context);
         const ast = parseCode(code);
         traverse(ast, listener);
-        
+
         // 验证结果 - 不应该有错误
         expect(errors.length).toBe(0);
     });
