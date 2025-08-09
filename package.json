@@ -7,7 +7,7 @@
     "minlint": "bin/minlint.js"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "vitest run",
     "build": "node esbuild.config.js",
     "watch": "npx nodemon --watch src --ext ts --exec \"npm run build && yalc push\""
   },
@@ -17,7 +17,8 @@
     "@types/node": "^24.1.0",
     "esbuild": "^0.25.8",
     "nodemon": "^3.1.10",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
   },
   "dependencies": {
     "chalk": "^5.4.1",
